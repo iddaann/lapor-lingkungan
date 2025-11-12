@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - LaporLingkungan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { font-family: 'Poppins', sans-serif; }
+        .fade-in { animation: fadeIn 0.8s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #map { height: 500px; border-radius: 12px; }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .status-dilaporkan { background-color: #FEF3C7; color: #92400E; }
+        .status-diproses { background-color: #DBEAFE; color: #1E40AF; }
+        .status-selesai { background-color: #D1FAE5; color: #065F46; }
+        .priority-high { background-color: #FECACA; color: #DC2626; }
+        .priority-medium { background-color: #FEF3C7; color: #D97706; }
+        .priority-low { background-color: #D1FAE5; color: #059669; }
+
+            #map { 
+        height: 400px; 
+        border-radius: 12px; 
+        z-index: 1;
+    }
+    
+    .map-container {
+        position: relative;
+    }
+    
+    .map-controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                    <i class="fas fa-leaf text-white"></i>
+                </div>
+                <h1 class="text-xl font-bold text-gray-800">LaporLingkungan</h1>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <span id="userName" class="text-gray-700"></span>
+                <button id="logoutBtn" class="px-4 py-2 text-red-500 border border-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-colors">
+                    <i class="fas fa-sign-out-alt mr-2"></i> Keluar
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm p-6 text-center">
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-flag text-blue-600 text-xl"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800" id="totalReports">0</h3>
+                <p class="text-gray-600">Total Laporan</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 text-center">
+                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-calendar-day text-green-600 text-xl"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800" id="reportsToday">0</h3>
+                <p class="text-gray-600">Laporan Hari Ini</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 text-center">
+                <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800" id="pendingReports">0</h3>
+                <p class="text-gray-600">Menunggu</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 text-center">
+                <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-check-circle text-purple-600 text-xl"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800" id="completedReports">0</h3>
+                <p class="text-gray-600">Selesai</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Sidebar -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Menu</h2>
+                    <div class="space-y-2">
+                        <button id="btnNewReport" class="w-full text-left px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                            <i class="fas fa-plus-circle mr-2"></i> Buat Laporan Baru
+                        </button>
+                        <button id="btnMyReports" class="w-full text-left px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-list mr-2"></i> Laporan Saya
+                        </button>
+                        <button id="btnAllReports" class="w-full text-left px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-map-marker-alt mr-2"></i> Semua Laporan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Statistik Cepat</h2>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Sampah</span>
+                            <span class="font-semibold" id="statsSampah">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Jalan Rusak</span>
+                            <span class="font-semibold" id="statsJalan">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Penerangan</span>
+                            <span class="font-semibold" id="statsPenerangan">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Banjir</span>
+                            <span class="font-semibold" id="statsBanjir">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="lg:col-span-2">
+                <!-- Create Report Form -->
+                <div id="createReportSection" class="bg-white rounded-xl shadow-sm p-6 mb-6 fade-in">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Buat Laporan Baru</h2>
+                    <form id="reportForm" class="space-y-4">
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">Jenis Masalah</label>
+                            <select id="problemType" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                                <option value="">Pilih jenis masalah</option>
+                                <option value="sampah">Sampah Menumpuk</option>
+                                <option value="jalan_rusak">Jalan Rusak</option>
+                                <option value="penerangan">Penerangan Jalan</option>
+                                <option value="banjir">Banjir</option>
+                                <option value="selokan">Selokan Tersumbat</option>
+                                <option value="polusi">Polusi Udara</option>
+                                <option value="lainnya">Lainnya</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">Judul Laporan</label>
+                            <input type="text" id="reportTitle" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Contoh: Sampah Menumpuk di Jalan Merdeka">
+                        </div>
+
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">Deskripsi Masalah</label>
+                            <textarea id="reportDescription" required rows="4" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Jelaskan masalah secara detail..."></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">Lokasi</label>
+                            <div class="flex space-x-2">
+                                <input type="text" id="locationInput" readonly class="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-gray-50" placeholder="Klik peta untuk memilih lokasi">
+                                <button type="button" id="openMapBtn" class="px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                                    <i class="fas fa-map-marker-alt mr-2"></i> Pilih di Peta
+                                </button>
+                            </div>
+                            <input type="hidden" id="latitude">
+                            <input type="hidden" id="longitude">
+                        </div>
+
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" id="cancelReport" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                                Batal
+                            </button>
+                            <button type="submit" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold">
+                                <i class="fas fa-paper-plane mr-2"></i> Kirim Laporan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Interactive Map -->
+                <div id="mapSection" class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Peta Laporan</h2>
+                    <div id="map"></div>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <button class="filter-btn active px-3 py-1 bg-green-500 text-white rounded-lg" data-status="">Semua</button>
+                        <button class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 rounded-lg" data-status="dilaporkan">Dilaporkan</button>
+                        <button class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 rounded-lg" data-status="diproses">Diproses</button>
+                        <button class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 rounded-lg" data-status="selesai">Selesai</button>
+                    </div>
+                </div>
+
+                <!-- Reports List -->
+                <div id="reportsSection" class="bg-white rounded-xl shadow-sm p-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Daftar Laporan</h2>
+                    <div id="reportsList" class="space-y-4">
+                        <!-- Reports will be loaded here dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const API_BASE = 'http://localhost:8080/api';
+        let map, currentUser, markers = [];
+
+        // Check authentication
+function checkAuth() {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    
+    if (!token) {
+        window.location.href = 'login.html';
+        return false;
+    }
+    
+    try {
+        if (user) {
+            currentUser = JSON.parse(user);
+            document.getElementById('userName').textContent = `Halo, ${currentUser.nama}`;
+        }
+        return true;
+    } catch (error) {
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = 'index.html';
+        return false;
+    }
+}
+
+        // Load reports to map
+        async function loadReportsToMap(status = '') {
+            // Clear existing markers
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            try {
+                const response = await fetch(`${API_BASE}/reports?status=${status}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    data.reports.forEach(report => {
+                        const marker = L.marker([report.latitude, report.longitude]).addTo(map);
+                        
+                        let priorityColor = 'gray';
+                        if (report.prioritas === 'high') priorityColor = 'red';
+                        else if (report.prioritas === 'medium') priorityColor = 'orange';
+                        else if (report.prioritas === 'low') priorityColor = 'green';
+
+                        marker.bindPopup(`
+                            <div class="p-2 min-w-64">
+                                <h3 class="font-bold text-lg">${report.judul}</h3>
+                                <p class="text-gray-600 text-sm">${report.deskripsi}</p>
+                                <div class="mt-2 flex flex-wrap gap-1">
+                                    <span class="status-badge status-${report.status}">${report.status}</span>
+                                    <span class="status-badge priority-${report.prioritas}">${report.prioritas}</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">Oleh: ${report.user.nama}</p>
+                            </div>
+                        `);
+                        
+                        markers.push(marker);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading reports to map:', error);
+            }
+        }
+
+        // Load statistics
+        async function loadStatistics() {
+            try {
+                const response = await fetch(`${API_BASE}/reports/stats`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('totalReports').textContent = data.stats.total_reports;
+                    document.getElementById('reportsToday').textContent = data.stats.reports_today;
+                    document.getElementById('pendingReports').textContent = data.stats.pending_reports;
+                    document.getElementById('completedReports').textContent = data.stats.completed_reports;
+                }
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        // Load user reports
+        async function loadUserReports() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_BASE}/reports/my-reports`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayReports(data.reports, 'Laporan Saya');
+                }
+            } catch (error) {
+                console.error('Error loading user reports:', error);
+            }
+        }
+
+        // Load all reports
+        async function loadAllReports() {
+            try {
+                const response = await fetch(`${API_BASE}/reports`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayReports(data.reports, 'Semua Laporan');
+                }
+            } catch (error) {
+                console.error('Error loading all reports:', error);
+            }
+        }
+
+
+        // Tambahkan di dashboard.html script section:
+
+// Edit report
+async function editReport(reportId) {
+    const token = localStorage.getItem('token');
+    
+    try {
+        const response = await fetch(`${API_BASE}/reports/${reportId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            const report = data.report;
+            
+            // Fill form with existing data
+            document.getElementById('problemType').value = report.jenis_problem;
+            document.getElementById('reportTitle').value = report.judul;
+            document.getElementById('reportDescription').value = report.deskripsi;
+            document.getElementById('latitude').value = report.latitude;
+            document.getElementById('longitude').value = report.longitude;
+            document.getElementById('locationInput').value = report.alamat;
+            
+            // Show create report section
+            document.getElementById('createReportSection').style.display = 'block';
+            document.getElementById('mapSection').style.display = 'none';
+            document.getElementById('reportsSection').style.display = 'none';
+            
+            // Change form to update mode
+            const form = document.getElementById('reportForm');
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                
+                const formData = {
+                    judul: document.getElementById('reportTitle').value,
+                    deskripsi: document.getElementById('reportDescription').value,
+                    jenis_problem: document.getElementById('problemType').value,
+                    latitude: parseFloat(document.getElementById('latitude').value),
+                    longitude: parseFloat(document.getElementById('longitude').value),
+                    alamat: document.getElementById('locationInput').value
+                };
+
+                try {
+                    const updateResponse = await fetch(`${API_BASE}/reports/${reportId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const updateData = await updateResponse.json();
+
+                    if (updateResponse.ok) {
+                        alert('Laporan berhasil diperbarui!');
+                        form.reset();
+                        loadStatistics();
+                        loadReportsToMap();
+                        loadAllReports();
+                        
+                        // Reset form handler
+                        form.onsubmit = originalFormHandler;
+                    } else {
+                        alert('Error: ' + updateData.error);
+                    }
+                } catch (error) {
+                    alert('Terjadi kesalahan. Silakan coba lagi.');
+                }
+            };
+        }
+    } catch (error) {
+        alert('Error loading report data');
+    }
+}
+
+// Delete report
+async function deleteReport(reportId) {
+    if (!confirm('Apakah Anda yakin ingin menghapus laporan ini?')) {
+        return;
+    }
+
+    const token = localStorage.getItem('token');
+    
+    try {
+        const response = await fetch(`${API_BASE}/reports/${reportId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('Laporan berhasil dihapus!');
+            loadStatistics();
+            loadReportsToMap();
+            loadAllReports();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Terjadi kesalahan. Silakan coba lagi.');
+    }
+}
+
+    const originalFormHandler = document.getElementById('reportForm').onsubmit;
+
+        // Display reports in list
+        function displayReports(reports, title) {
+            const reportsList = document.getElementById('reportsList');
+            document.querySelector('#reportsSection h2').textContent = title;
+            
+            if (reports.length === 0) {
+                reportsList.innerHTML = '<p class="text-gray-500 text-center py-8">Belum ada laporan</p>';
+                return;
+            }
+
+            reportsList.innerHTML = reports.map(report => `
+                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-semibold text-lg text-gray-800">${report.judul}</h3>
+                        <div class="flex gap-2">
+                            <span class="status-badge status-${report.status}">${report.status}</span>
+                            <span class="status-badge priority-${report.prioritas}">${report.prioritas}</span>
+                        </div>
+                    </div>
+                    <p class="text-gray-600 mb-3">${report.deskripsi}</p>
+                    <div class="flex justify-between items-center text-sm text-gray-500">
+                        <span><i class="fas fa-map-marker-alt mr-1"></i> ${report.alamat || 'Lokasi tidak tersedia'}</span>
+                        <span>${new Date(report.created_at).toLocaleDateString('id-ID')}</span>
+                    </div>
+                    ${currentUser.role === 'admin' || currentUser.id === report.user_id ? `
+                    <div class="mt-3 flex gap-2">
+                        <button onclick="editReport(${report.id})" class="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">
+                            <i class="fas fa-edit mr-1"></i> Edit
+                        </button>
+                        <button onclick="deleteReport(${report.id})" class="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600">
+                            <i class="fas fa-trash mr-1"></i> Hapus
+                        </button>
+                    </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Submit report form
+// Submit report form - PERBAIKAN
+document.getElementById('reportForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const token = localStorage.getItem('token');
+    const formData = {
+        judul: document.getElementById('reportTitle').value,
+        deskripsi: document.getElementById('reportDescription').value,
+        jenis_problem: document.getElementById('problemType').value,
+        latitude: parseFloat(document.getElementById('latitude').value),
+        longitude: parseFloat(document.getElementById('longitude').value),
+        alamat: document.getElementById('locationInput').value
+    };
+
+    // Validasi lokasi
+    if (!formData.latitude || !formData.longitude) {
+        alert('Silakan pilih lokasi di peta terlebih dahulu!');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/reports`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('Laporan berhasil dibuat!');
+            document.getElementById('reportForm').reset();
+            
+            // PERBAIKAN: Refresh semua data
+            loadStatistics();
+            loadReportsToMap();
+            loadAllReports(); // Ini yang penting - refresh daftar laporan
+            
+            // Sembunyikan form dan tampilkan daftar laporan
+            document.getElementById('createReportSection').style.display = 'none';
+            document.getElementById('mapSection').style.display = 'block';
+            document.getElementById('reportsSection').style.display = 'block';
+            
+        } else {
+            alert('Error: ' + (data.error || 'Gagal membuat laporan'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Terjadi kesalahan. Silakan coba lagi.');
+    }
+});
+
+        // Event listeners
+        document.getElementById('btnNewReport').addEventListener('click', () => {
+            document.getElementById('createReportSection').style.display = 'block';
+            document.getElementById('mapSection').style.display = 'none';
+            document.getElementById('reportsSection').style.display = 'none';
+        });
+
+        document.getElementById('btnMyReports').addEventListener('click', () => {
+            document.getElementById('createReportSection').style.display = 'none';
+            document.getElementById('mapSection').style.display = 'block';
+            document.getElementById('reportsSection').style.display = 'block';
+            loadUserReports();
+        });
+
+        document.getElementById('btnAllReports').addEventListener('click', () => {
+            document.getElementById('createReportSection').style.display = 'none';
+            document.getElementById('mapSection').style.display = 'block';
+            document.getElementById('reportsSection').style.display = 'block';
+            loadAllReports();
+        });
+
+        document.getElementById('openMapBtn').addEventListener('click', () => {
+            document.getElementById('mapSection').scrollIntoView({ behavior: 'smooth' });
+
+            setTimeout(() => {
+                alert('klik di peta untuk memilih lokasi laporan Anda.');
+            }, 500);
+        });
+
+        document.getElementById('cancelReport').addEventListener('click', () => {
+            document.getElementById('reportForm').reset();
+            clearTemporaryMarker();
+            document.getElementById('createReportSection').style.display = 'none';
+            document.getElementById('mapSection').style.display = 'block';
+        document.getElementById('reportsSection').style.display = 'block';
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = 'index.html';
+        });
+
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(b => {
+                    b.classList.remove('active', 'bg-green-500', 'text-white');
+                    b.classList.add('bg-gray-200', 'text-gray-700');
+                });
+                this.classList.add('active', 'bg-green-500', 'text-white');
+                this.classList.remove('bg-gray-200', 'text-gray-700');
+                
+                const status = this.dataset.status;
+                loadReportsToMap(status);
+            });
+        });
+
+        // Initialize map - PERBAIKAN
+function initMap() {
+    // Default coordinates (Jakarta)
+    const defaultCoords = [-7.341587, 108.218382];
+    
+    // Buat peta
+    map = L.map('map').setView(defaultCoords, 13);
+    
+    // Tambahkan tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Tambahkan kontrol skala
+    L.control.scale().addTo(map);
+
+    // Event listener untuk klik peta - PERBAIKAN
+    map.on('click', function(e) {
+        // Selalu aktif, tidak perlu cek section mana yang tampil
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+        
+        // Update form inputs
+        document.getElementById('latitude').value = lat;
+        document.getElementById('longitude').value = lng;
+        
+        // Tambahkan marker sementara
+        clearTemporaryMarker();
+        addTemporaryMarker(lat, lng);
+        
+        // Reverse geocoding to get address
+        document.getElementById('locationInput').value = 'Mengambil alamat...';
+        
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.display_name) {
+                    document.getElementById('locationInput').value = data.display_name;
+                } else {
+                    document.getElementById('locationInput').value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                }
+            })
+            .catch(() => {
+                document.getElementById('locationInput').value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            });
+    });
+
+    loadReportsToMap();
+}
+
+// Fungsi untuk marker sementara
+let temporaryMarker = null;
+
+function addTemporaryMarker(lat, lng) {
+    temporaryMarker = L.marker([lat, lng], {
+        icon: L.divIcon({
+            className: 'custom-marker marker-new',
+            html: '<i class="fas fa-map-marker-alt"></i>',
+            iconSize: [30, 30],
+            iconAnchor: [15, 30]
+        })
+    }).addTo(map);
+    
+    temporaryMarker.bindPopup('Lokasi yang dipilih').openPopup();
+}
+
+function clearTemporaryMarker() {
+    if (temporaryMarker) {
+        map.removeLayer(temporaryMarker);
+        temporaryMarker = null;
+    }
+}
+
+// Load reports to map - PERBAIKAN
+async function loadReportsToMap(status = '') {
+    // Clear existing markers
+    markers.forEach(marker => map.removeLayer(marker));
+    markers = [];
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE}/reports?status=${status}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const data = await response.json();
+        
+        if (response.ok && data.reports) {
+            data.reports.forEach(report => {
+                // Tentukan warna marker berdasarkan prioritas
+                let markerColor = 'gray';
+                if (report.prioritas === 'high') markerColor = 'red';
+                else if (report.prioritas === 'medium') markerColor = 'orange';
+                else if (report.prioritas === 'low') markerColor = 'green';
+
+                const marker = L.marker([report.latitude, report.longitude], {
+                    icon: L.divIcon({
+                        className: `custom-marker marker-${report.prioritas}`,
+                        html: `<i class="fas fa-${getProblemIcon(report.jenis_problem)}"></i>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 30]
+                    })
+                }).addTo(map);
+                
+                marker.bindPopup(`
+                    <div class="p-2 min-w-64">
+                        <h3 class="font-bold text-lg">${report.judul}</h3>
+                        <p class="text-gray-600 text-sm">${report.deskripsi}</p>
+                        <div class="mt-2 flex flex-wrap gap-1">
+                            <span class="status-badge status-${report.status}">${report.status}</span>
+                            <span class="status-badge priority-${report.prioritas}">${report.prioritas}</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Oleh: ${report.user ? report.user.nama : 'Unknown'}</p>
+                    </div>
+                `);
+                
+                markers.push(marker);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading reports to map:', error);
+    }
+}
+
+// Helper function untuk icon
+function getProblemIcon(problemType) {
+    const icons = {
+        'sampah': 'trash',
+        'jalan_rusak': 'road',
+        'penerangan': 'lightbulb',
+        'banjir': 'water',
+        'selokan': 'tint',
+        'polusi': 'smog',
+        'lainnya': 'exclamation-triangle'
+    };
+    return icons[problemType] || 'map-marker-alt';
+}
+
+        // Initialize
+        checkAuth();
+        initMap();
+        loadStatistics();
+        loadAllReports();
+
+        // Refresh data every 30 seconds
+        setInterval(() => {
+            loadStatistics();
+            loadReportsToMap();
+        }, 30000);
+    </script>
+</body>
+</html>
